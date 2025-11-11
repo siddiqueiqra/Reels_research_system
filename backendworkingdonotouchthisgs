@@ -1,0 +1,534 @@
+// CONFIGURATION
+var SHEET_ID = '1WwzjpZFH6yadLjNqPn06jpvV1JWu25-ZmeND-3av_tQ';
+
+var SHEET_NAMES = {
+  RESEARCH: 'Research',
+  PRODUCTION: 'Production',
+  USERS: 'Users',
+  ACTIVITY: 'Activity'
+};
+
+// Serve the HTML page
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Reels Research System')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// Test connection
+function testConnection() {
+  Logger.log('Testing connection...');
+  Logger.log('Sheet ID: ' + SHEET_ID);
+  
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    Logger.log('✓ Spreadsheet opened: ' + ss.getName());
+    
+    var sheet = ss.getSheetByName(SHEET_NAMES.RESEARCH);
+    if (sheet) {
+      Logger.log('✓ Research sheet found');
+      Logger.log('✓ Last row: ' + sheet.getLastRow());
+      
+      if (sheet.getLastRow() > 1) {
+        var data = sheet.getRange(2, 1, 1, 3).getValues();
+        Logger.log('✓ First row data: ID=' + data[0][0] + ', Date=' + data[0][1] + ', User=' + data[0][2]);
+      }
+      
+      return 'SUCCESS: Everything working!';
+    } else {
+      Logger.log('✗ Research sheet NOT found');
+      return 'ERROR: Research sheet not found';
+    }
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return 'ERROR: ' + e.toString();
+  }
+}
+
+// Initialize sheets
+function initializeSheets() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  
+  // Create Users sheet if doesn't exist
+  var usersSheet = ss.getSheetByName(SHEET_NAMES.USERS);
+  if (!usersSheet) {
+    usersSheet = ss.insertSheet(SHEET_NAMES.USERS);
+    usersSheet.getRange('A1:E1').setValues([['Username', 'Password', 'Name', 'Avatar', 'Active']]);
+    usersSheet.getRange('A1:E1').setBackground('#9D4EDD').setFontColor('#FFFFFF').setFontWeight('bold');
+    
+    var users = [
+      ['palak', 'Pk@2024#Reels!89', 'Palak', 'PK', 'Yes'],
+      ['shruti', 'Sh@2024#Reels!76', 'Shruti', 'SH', 'Yes'],
+      ['shruti.thakur', 'ST@2024#Reels!54', 'Shruti Thakur', 'ST', 'Yes'],
+      ['dishita', 'Dh@2024#Reels!32', 'Dishita', 'DH', 'Yes']
+    ];
+    usersSheet.getRange(2, 1, users.length, users[0].length).setValues(users);
+  }
+  
+  return { success: true };
+}
+
+// Authenticate user
+function authenticateUser(username, password) {
+  try {
+    Logger.log('=== AUTHENTICATE START ===');
+    Logger.log('Username: ' + username);
+    
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+    
+    if (!sheet) {
+      Logger.log('Users sheet not found, initializing...');
+      initializeSheets();
+      sheet = ss.getSheetByName(SHEET_NAMES.USERS);
+    }
+    
+    var data = sheet.getDataRange().getValues();
+    Logger.log('Users sheet has ' + (data.length - 1) + ' users');
+    
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === username && data[i][1] === password && data[i][4] === 'Yes') {
+        Logger.log('✓ User authenticated: ' + data[i][2]);
+        return {
+          success: true,
+          user: {
+            username: data[i][0],
+            name: data[i][2],
+            avatar: data[i][3]
+          }
+        };
+      }
+    }
+    
+    Logger.log('✗ Authentication failed');
+    return { success: false, message: 'Invalid credentials' };
+    
+  } catch (e) {
+    Logger.log('✗ Error in authenticateUser: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Get all research for a user
+function getAllResearch(username) {
+  try {
+    Logger.log('=== GET ALL RESEARCH START ===');
+    Logger.log('Username: "' + username + '"');
+
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.RESEARCH);
+    if (!sheet) return { success: false, message: 'Research sheet not found', data: [] };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, data: [] };
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 17).getValues();
+
+    var usernameLower = String(username).trim().toLowerCase();
+    var result = [];
+
+    for (var i = 0; i < data.length; i++) {
+      if (!data[i][0]) continue;
+      var addedBy = (data[i][2] || '').toString().trim();
+      if (addedBy.toLowerCase() === usernameLower) {
+        result.push({
+          id: data[i][0],
+          dateAdded: data[i][1] ? new Date(data[i][1]).toISOString() : null,
+          addedBy: data[i][2] || '',
+          accountName: data[i][3] || '',
+          category: data[i][4] || '',
+          sourceType: data[i][5] || '',
+          outlierCategory: data[i][6] || '',
+          hook: data[i][7] || '',
+          topic: data[i][8] || '',
+          music: data[i][9] || '',
+          brolls: data[i][10] || '',
+          shootingStyle: data[i][11] || '',
+          whyOutperformed: data[i][12] || '',
+          howRecreate: data[i][13] || '',
+          reelLink: data[i][14] || '',
+          notes: data[i][15] || '',
+          status: data[i][16] || 'Pending'
+        });
+      }
+    }
+
+    Logger.log('✓ Found ' + result.length + ' items for user: ' + username);
+    return JSON.parse(JSON.stringify({ success: true, data: result }));
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return JSON.parse(JSON.stringify({ success: false, message: e.toString(), data: [] }));
+  }
+}
+
+// Add research
+function addResearch(data) {
+  try {
+    Logger.log('=== ADD RESEARCH START ===');
+    
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.RESEARCH);
+    
+    var lastRow = sheet.getLastRow();
+    var id = lastRow > 1 ? sheet.getRange(lastRow, 1).getValue() + 1 : 1;
+    
+    var row = [
+      id,
+      new Date(),
+      data.addedBy,
+      data.accountName,
+      data.category,
+      data.sourceType,
+      data.outlierCategory,
+      data.hook || '',
+      data.topic || '',
+      data.music || '',
+      data.brolls || '',
+      data.shootingStyle || '',
+      data.whyOutperformed || '',
+      data.howRecreate || '',
+      data.reelLink,
+      data.notes || '',
+      'Pending'
+    ];
+    
+    sheet.appendRow(row);
+    
+    Logger.log('✓ Research added with ID: ' + id);
+    return { success: true, id: id };
+    
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Update research
+function updateResearch(data) {
+  try {
+    Logger.log('=== UPDATE RESEARCH START ===');
+    
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.RESEARCH);
+    var allData = sheet.getDataRange().getValues();
+    
+    for (var i = 1; i < allData.length; i++) {
+      if (allData[i][0] == data.id) {
+        sheet.getRange(i + 1, 4).setValue(data.accountName);
+        sheet.getRange(i + 1, 5).setValue(data.category);
+        sheet.getRange(i + 1, 6).setValue(data.sourceType);
+        sheet.getRange(i + 1, 7).setValue(data.outlierCategory);
+        sheet.getRange(i + 1, 8).setValue(data.hook || '');
+        sheet.getRange(i + 1, 9).setValue(data.topic || '');
+        sheet.getRange(i + 1, 10).setValue(data.music || '');
+        sheet.getRange(i + 1, 11).setValue(data.brolls || '');
+        sheet.getRange(i + 1, 12).setValue(data.shootingStyle || '');
+        sheet.getRange(i + 1, 13).setValue(data.whyOutperformed || '');
+        sheet.getRange(i + 1, 14).setValue(data.howRecreate || '');
+        sheet.getRange(i + 1, 15).setValue(data.reelLink);
+        sheet.getRange(i + 1, 16).setValue(data.notes || '');
+        sheet.getRange(i + 1, 17).setValue(data.status);
+        Logger.log('added by' + data.addedBy)
+        
+        Logger.log('✓ Updated research row ' + (i + 1));
+        
+        // Update production if this research is in production
+        updateProductionFromResearch(data);
+        
+        // If approved, move to production
+        if (data.status === 'Approved') {
+          Logger.log("inside Approved");
+          moveToProduction(data);
+        }
+        
+        return { success: true };
+      }
+    }
+    
+    return { success: false, message: 'Not found' };
+    
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Update production from research changes
+function updateProductionFromResearch(researchData) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.PRODUCTION);
+    if (!sheet) return;
+    
+    var data = sheet.getDataRange().getValues();
+    
+    // Find production item with matching researchId
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][1] == researchData.id) {
+        // Update columns D-J (Account, Category, Outlier, Hook, Topic, Why, Link)
+        sheet.getRange(i + 1, 4).setValue(researchData.accountName);
+        sheet.getRange(i + 1, 5).setValue(researchData.category);
+        sheet.getRange(i + 1, 6).setValue(researchData.outlierCategory);
+        sheet.getRange(i + 1, 7).setValue(researchData.hook || '');
+        sheet.getRange(i + 1, 8).setValue(researchData.topic || '');
+        sheet.getRange(i + 1, 9).setValue(researchData.whyOutperformed || '');
+        sheet.getRange(i + 1, 10).setValue(researchData.reelLink);
+        
+        Logger.log('✓ Updated production item linked to research ID: ' + researchData.id);
+        break;
+      }
+    }
+  } catch (e) {
+    Logger.log('✗ Error updating production from research: ' + e.toString());
+  }
+}
+
+// Delete research
+function deleteResearch(id, username) {
+  try {
+    Logger.log('=== DELETE RESEARCH START ===');
+    
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.RESEARCH);
+    var data = sheet.getDataRange().getValues();
+    
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] == id) {
+        sheet.deleteRow(i + 1);
+        Logger.log('✓ Deleted row ' + (i + 1));
+        return { success: true };
+      }
+    }
+    
+    return { success: false, message: 'Not found' };
+    
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Get all production for a user
+function getAllProduction(username) {
+  try {
+    Logger.log('=== GET PRODUCTION START ===');
+    Logger.log('Username: "' + username + '"');
+
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.PRODUCTION);
+    if (!sheet) return { success: false, message: 'Production sheet not found', data: [] };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, data: [] };
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 23).getValues();
+    var result = [];
+    var usernameLower = String(username).trim().toLowerCase();
+
+    for (var i = 0; i < data.length; i++) {
+      if (!data[i][0]) continue;
+      var addedBy = (data[i][22] || '').toString().trim().toLowerCase(); // Column W (index 22)
+
+      if (addedBy === usernameLower) {
+        result.push({
+          id: data[i][0],
+          researchId: data[i][1],
+          dateAdded: data[i][2] ? new Date(data[i][2]).toISOString() : null,
+          accountName: data[i][3] || '',
+          category: data[i][4] || '',
+          outlierCategory: data[i][5] || '',
+          hook: data[i][6] || '',
+          topic: data[i][7] || '',
+          whyOutperformed: data[i][8] || '',
+          reelLink: data[i][9] || '',
+          mainScript: data[i][10] || '',
+          cta: data[i][11] || '',
+          firstFrame: data[i][12] || '',
+          bRolls: data[i][13] || '',
+          thumbnailText: data[i][14] || '',
+          propNotes: data[i][15] || '',
+          directorVersion: data[i][16] || '',
+          editorVersion: data[i][17] || '',
+          speakerVersion: data[i][18] || '',
+          notes: data[i][19] || '',
+          prodStatus: data[i][20] || 'Draft',
+          approvalStatus: data[i][21] || 'Pending',
+          addedBy: data[i][23] || ''
+        });
+      }
+    }
+
+    Logger.log('✓ Found ' + result.length + ' production items for user: ' + username);
+    return { success: true, data: result };
+
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return { success: false, message: e.toString(), data: [] };
+  }
+}
+
+// Update production
+function updateProduction(data) {
+  try {
+    Logger.log('=== UPDATE PRODUCTION START ===');
+    
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.PRODUCTION);
+    
+    if (!sheet) {
+      return { success: false, message: 'Production sheet not found' };
+    }
+    
+    var allData = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    
+    for (var i = 1; i < allData.length; i++) {
+      if (allData[i][0] == data.id) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) {
+      return { success: false, message: 'Production record not found' };
+    }
+    
+    // Update all editable columns
+    if (data.mainScript !== undefined) sheet.getRange(rowIndex, 11).setValue(data.mainScript);
+    if (data.cta !== undefined) sheet.getRange(rowIndex, 12).setValue(data.cta);
+    if (data.firstFrame !== undefined) sheet.getRange(rowIndex, 13).setValue(data.firstFrame);
+    if (data.bRolls !== undefined) sheet.getRange(rowIndex, 14).setValue(data.bRolls);
+    if (data.thumbnailText !== undefined) sheet.getRange(rowIndex, 15).setValue(data.thumbnailText);
+    if (data.propNotes !== undefined) sheet.getRange(rowIndex, 16).setValue(data.propNotes);
+    if (data.directorVersion !== undefined) sheet.getRange(rowIndex, 17).setValue(data.directorVersion);
+    if (data.editorVersion !== undefined) sheet.getRange(rowIndex, 18).setValue(data.editorVersion);
+    if (data.speakerVersion !== undefined) sheet.getRange(rowIndex, 19).setValue(data.speakerVersion);
+    if (data.notes !== undefined) sheet.getRange(rowIndex, 20).setValue(data.notes);
+    if (data.prodStatus !== undefined) sheet.getRange(rowIndex, 21).setValue(data.prodStatus);
+    if (data.approvalStatus !== undefined) sheet.getRange(rowIndex, 22).setValue(data.approvalStatus);
+    
+    Logger.log('✓ Production updated successfully');
+    return { success: true };
+    
+  } catch (e) {
+    Logger.log('❌ ERROR: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Delete production
+function deleteProduction(id) {
+  try {
+    Logger.log('=== DELETE PRODUCTION START ===');
+    
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.PRODUCTION);
+    var data = sheet.getDataRange().getValues();
+    
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] == id) {
+        sheet.deleteRow(i + 1);
+        Logger.log('✓ Deleted production row ' + (i + 1));
+        return { success: true };
+      }
+    }
+    
+    return { success: false, message: 'Not found' };
+    
+  } catch (e) {
+    Logger.log('✗ ERROR: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Move to production
+function moveToProduction(researchData) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.PRODUCTION);
+    if (!sheet) return { success: false, message: 'Production sheet not found' };
+
+    // Avoid duplicates
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][1] == researchData.id) {
+        return { success: true, message: 'Already in production' };
+      }
+    }
+
+    var lastRow = sheet.getLastRow();
+    var newId = lastRow > 1 ? sheet.getRange(lastRow, 1).getValue() + 1 : 1;
+
+
+    Logger.log("Adding research data to production data")
+    // Write exactly 23 columns including Added By
+    var row = [
+      newId,                           // 1: ID
+      researchData.id,                 // 2: ResearchID
+      new Date(),                      // 3: Date
+      researchData.accountName,        // 4: Account
+      researchData.category,           // 5: Category
+      researchData.outlierCategory,    // 6: Outlier
+      researchData.hook || '',         // 7: Hook
+      researchData.topic || '',        // 8: Topic
+      researchData.whyOutperformed || '', // 9: Why
+      researchData.reelLink || '',     // 10: Link
+      '', '', '', '', '', '', '', '', '', // 11–19 empty (Script, CTA, etc.)
+      '',                              // 20: Notes
+      'Draft',                         // 21: ProdStatus
+      'Pending',                       // 22: Approval
+      researchData.addedBy || ''       // 23: Added By
+    ];
+
+    sheet.appendRow(row);
+    Logger.log('✓ Added to Production with Added By: ' + researchData.addedBy);
+    return { success: true, id: newId };
+
+  } catch (e) {
+    Logger.log('✗ moveToProduction error: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+// Get stats
+function getStats() {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName(SHEET_NAMES.RESEARCH);
+    
+    if (!sheet || sheet.getLastRow() <= 1) {
+      return { success: true, stats: { total: 0, pending: 0, approved: 0, thisWeek: 0 } };
+    }
+    
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 17).getValues();
+    var total = 0;
+    var pending = 0;
+    var approved = 0;
+    var thisWeek = 0;
+    
+    var weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][0]) {
+        total++;
+        if (data[i][16] === 'Pending') pending++;
+        if (data[i][16] === 'Approved') approved++;
+        if (new Date(data[i][1]) > weekAgo) thisWeek++;
+      }
+    }
+    
+    return {
+      success: true,
+      stats: {
+        total: total,
+        pending: pending,
+        approved: approved,
+        thisWeek: thisWeek
+      }
+    };
+    
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
